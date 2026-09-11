@@ -1,0 +1,17 @@
+{
+  "job_id": "7f9e1c0b-9122-40f7-9113-f5f219c9f1df",
+  "status": "completed",
+  "voice": "am_michael",
+  "speed": 1.0,
+  "device_req": "gpu",
+  "lang": "a",
+  "created_at": 1788017361.0342262,
+  "updated_at": 1788017400.4248462,
+  "percent": 100.0,
+  "processed_chunks": 31,
+  "total_chunks": 31,
+  "eta_seconds": 0.0,
+  "error": null,
+  "result_file": "audio.zip",
+  "result_type": "zip"
+}

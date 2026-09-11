@@ -1,0 +1,19 @@
+{
+  "job_id": "fa9910db-0f52-42b3-bf74-0972eb8600f8",
+  "status": "completed",
+  "voice": "bm_fable",
+  "speed": 1.0,
+  "device_req": "auto",
+  "lang": "a",
+  "created_at": 1788131543.4373047,
+  "updated_at": 1788131570.991512,
+  "percent": 100.0,
+  "processed_chunks": 81,
+  "total_chunks": 81,
+  "eta_seconds": 0.0,
+  "error": null,
+  "result_file": "audio.wav",
+  "result_type": "wav",
+  "srt_file": "audio.srt",
+  "bundle_file": "bundle.zip"
+}

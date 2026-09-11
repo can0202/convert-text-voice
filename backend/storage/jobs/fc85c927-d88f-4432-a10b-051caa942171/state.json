@@ -1,0 +1,17 @@
+{
+  "job_id": "fc85c927-d88f-4432-a10b-051caa942171",
+  "status": "completed",
+  "voice": "am_michael",
+  "speed": 1.0,
+  "device_req": "gpu",
+  "lang": "a",
+  "created_at": 1788019131.8041108,
+  "updated_at": 1788019172.1175015,
+  "percent": 100.0,
+  "processed_chunks": 34,
+  "total_chunks": 34,
+  "eta_seconds": 0.0,
+  "error": null,
+  "result_file": "audio.zip",
+  "result_type": "zip"
+}

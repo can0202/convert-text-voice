@@ -1,0 +1,17 @@
+{
+  "job_id": "035d1629-1eda-42e1-b5b5-249afe089069",
+  "status": "completed",
+  "voice": "af_heart",
+  "speed": 1.0,
+  "device_req": "auto",
+  "lang": "a",
+  "created_at": 1788014904.7701724,
+  "updated_at": 1788014935.4899318,
+  "percent": 100.0,
+  "processed_chunks": 2,
+  "total_chunks": 2,
+  "eta_seconds": 0.0,
+  "error": null,
+  "result_file": "audio.zip",
+  "result_type": "zip"
+}

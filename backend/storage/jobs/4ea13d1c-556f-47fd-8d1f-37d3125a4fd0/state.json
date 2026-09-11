@@ -1,0 +1,19 @@
+{
+  "job_id": "4ea13d1c-556f-47fd-8d1f-37d3125a4fd0",
+  "status": "completed",
+  "voice": "am_echo",
+  "speed": 1.0,
+  "device_req": "auto",
+  "lang": "a",
+  "created_at": 1788399237.331488,
+  "updated_at": 1788399278.8767965,
+  "percent": 100.0,
+  "processed_chunks": 129,
+  "total_chunks": 129,
+  "eta_seconds": 0.0,
+  "error": null,
+  "result_file": "audio.wav",
+  "result_type": "wav",
+  "srt_file": "audio.srt",
+  "bundle_file": "bundle.zip"
+}

@@ -1,0 +1,19 @@
+{
+  "job_id": "72ee4392-68bb-432b-8af2-504781428edd",
+  "status": "completed",
+  "voice": "af_heart",
+  "speed": 1.0,
+  "device_req": "auto",
+  "lang": "a",
+  "created_at": 1788019708.9144576,
+  "updated_at": 1788019718.828198,
+  "percent": 100.0,
+  "processed_chunks": 8,
+  "total_chunks": 8,
+  "eta_seconds": 0.0,
+  "error": null,
+  "result_file": "audio.wav",
+  "result_type": "wav",
+  "srt_file": "audio.srt",
+  "bundle_file": "bundle.zip"
+}
