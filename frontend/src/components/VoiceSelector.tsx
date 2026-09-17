@@ -8,6 +8,8 @@ interface Voice {
 }
 
 interface VoiceSelectorProps {
+    language: string;
+    onLanguageChange: (val: string) => void;
     voices: Voice[];
     selectedVoice: string;
     onVoiceChange: (val: string) => void;
@@ -20,6 +22,7 @@ interface VoiceSelectorProps {
 }
 
 export function VoiceSelector({
+    language, onLanguageChange,
     voices, selectedVoice, onVoiceChange,
     speed, onSpeedChange,
     device, onDeviceChange,
@@ -62,8 +65,73 @@ export function VoiceSelector({
         { value: 'gpu',  label: 'GPU',  available: !!hasGpu },
     ];
 
+    const renderVoices = () => {
+        if (language === 'en') {
+            return voices.map(v => (
+                <option key={v.id} value={v.id} style={{ background: '#1e2130' }}>
+                    {v.name} ({v.gender}, {v.lang})
+                </option>
+            ));
+        } else {
+            const north = voices.filter(v => v.name.includes('[Bắc]') || v.name.toLowerCase().includes('bắc') || v.name.toLowerCase().includes('hà nội'));
+            const center = voices.filter(v => v.name.includes('[Trung]') || v.name.toLowerCase().includes('trung') || v.name.toLowerCase().includes('huế') || v.name.toLowerCase().includes('đà nẵng'));
+            const south = voices.filter(v => v.name.includes('[Nam]') || v.name.toLowerCase().includes('nam') || v.name.toLowerCase().includes('sài gòn'));
+            
+            const mappedIds = new Set([...north, ...center, ...south].map(v => v.id));
+            const other = voices.filter(v => !mappedIds.has(v.id));
+
+            return (
+                <>
+                    {north.length > 0 && (
+                        <optgroup label="Miền Bắc" style={{ background: '#1e2130', color: '#94a3b8' }}>
+                            {north.map(v => <option key={v.id} value={v.id} style={{ color: 'white' }}>{v.name}</option>)}
+                        </optgroup>
+                    )}
+                    {center.length > 0 && (
+                        <optgroup label="Miền Trung" style={{ background: '#1e2130', color: '#94a3b8' }}>
+                            {center.map(v => <option key={v.id} value={v.id} style={{ color: 'white' }}>{v.name}</option>)}
+                        </optgroup>
+                    )}
+                    {south.length > 0 && (
+                        <optgroup label="Miền Nam" style={{ background: '#1e2130', color: '#94a3b8' }}>
+                            {south.map(v => <option key={v.id} value={v.id} style={{ color: 'white' }}>{v.name}</option>)}
+                        </optgroup>
+                    )}
+                    {other.length > 0 && (
+                        <optgroup label="Khác" style={{ background: '#1e2130', color: '#94a3b8' }}>
+                            {other.map(v => <option key={v.id} value={v.id} style={{ color: 'white' }}>{v.name}</option>)}
+                        </optgroup>
+                    )}
+                </>
+            );
+        }
+    };
+
     return (
         <div className="flex flex-col gap-5">
+            {/* Language toggle */}
+            <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Ngôn ngữ
+                </label>
+                <div className="flex p-1 gap-1 bg-white/[0.03] rounded-xl border border-white/[0.08] w-fit">
+                    <button
+                        onClick={() => onLanguageChange('en')}
+                        disabled={disabled}
+                        className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${language === 'en' ? 'bg-violet-500/20 text-violet-300' : 'text-slate-400 hover:text-slate-200'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        Tiếng Anh
+                    </button>
+                    <button
+                        onClick={() => onLanguageChange('vi')}
+                        disabled={disabled}
+                        className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${language === 'vi' ? 'bg-violet-500/20 text-violet-300' : 'text-slate-400 hover:text-slate-200'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        Tiếng Việt
+                    </button>
+                </div>
+            </div>
+
             {/* Row 1: Voice & Speed */}
             <div className="grid grid-cols-2 gap-4">
                 {/* Voice picker */}
@@ -83,11 +151,7 @@ export function VoiceSelector({
                             onChange={(e) => handleVoiceChange(e.target.value)}
                             disabled={disabled}
                         >
-                            {voices.map(v => (
-                                <option key={v.id} value={v.id} style={{ background: '#1e2130' }}>
-                                    {v.name} ({v.gender}, {v.lang})
-                                </option>
-                            ))}
+                            {renderVoices()}
                         </select>
                         <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />

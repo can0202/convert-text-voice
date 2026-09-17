@@ -35,6 +35,8 @@ venv.bak/
 backend/storage/jobs/
 
 # OS/Editors
+node_modules
+
 .DS_Store
 .idea/
 .vscode/

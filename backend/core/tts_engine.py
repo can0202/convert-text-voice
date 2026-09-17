@@ -12,35 +12,41 @@ import soundfile as sf
 # pyrefly: ignore [missing-import]
 import sys
 
-SAMPLE_RATE = 24000
-PAUSE_PATTERN = re.compile(r'\[pause\s+([\d.]+)s\]', re.IGNORECASE)
+ENGINE_KOKORO = "kokoro"
+ENGINE_VIENEU = "vieneu"
 
-try:
-    # pyrefly: ignore [missing-import]
-    import torch
-except ImportError:
-    torch = None
+def get_sample_rate(engine: str) -> int:
+    return 48000 if engine == ENGINE_VIENEU else 24000
+
+PAUSE_PATTERN = re.compile(r'\[pause\s+([\d.]+)s\]', re.IGNORECASE)
 
 # Global variables for multiprocessing workers
 _pipeline = None
 _voice = None
 _speed = None
+_engine = None
 
 
 def detect_device() -> Dict[str, Any]:
     """Detect available hardware for TTS processing."""
     has_cuda = False
     gpu_name = None
-    if torch is not None and torch.cuda.is_available():
-        has_cuda = True
-        gpu_name = torch.cuda.get_device_name(0)
-    
-    # MPS (Apple Silicon) detection
     has_mps = False
-    if torch is not None and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        has_mps = True
-        if not gpu_name:
-            gpu_name = "Apple Silicon GPU"
+
+    try:
+        # pyrefly: ignore [missing-import]
+        import torch
+        if torch.cuda.is_available():
+            has_cuda = True
+            gpu_name = torch.cuda.get_device_name(0)
+        
+        # MPS (Apple Silicon) detection
+        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            has_mps = True
+            if not gpu_name:
+                gpu_name = "Apple Silicon GPU"
+    except ImportError:
+        pass
             
     return {
         "has_cuda": has_cuda,
@@ -157,24 +163,39 @@ def _hard_split(s: str, max_chars: int) -> List[str]:
     return [r for r in result if r]
 
 
-def init_worker(lang_code: str, voice: str, speed: float, device: str):
+def init_worker(engine: str, lang_code: str, voice: str, speed: float, device: str):
     """Initialize model inside each worker process."""
-    global _pipeline, _voice, _speed
-    # pyrefly: ignore [import-error, missing-import]
-    from kokoro import KPipeline
-    _pipeline = KPipeline(lang_code=lang_code, device=device)
+    global _pipeline, _voice, _speed, _engine
+    _engine = engine
     _voice = voice
     _speed = speed
+    
+    if engine == ENGINE_VIENEU:
+        # pyrefly: ignore [import-error, missing-import]
+        from vieneu import Vieneu
+        # Note: Vieneu doesn't use lang_code, it's specific to Vietnamese.
+        _pipeline = Vieneu()
+    else:
+        # pyrefly: ignore [import-error, missing-import]
+        from kokoro import KPipeline
+        _pipeline = KPipeline(lang_code=lang_code, device=device)
 
 
 def process_chunk(args: Tuple[int, str]) -> Tuple[int, np.ndarray, Optional[str]]:
     """Process a single text chunk in worker."""
     idx, chunk = args
     try:
-        generator = _pipeline(chunk, voice=_voice, speed=_speed)
-        parts = [audio for _, _, audio in generator]
-        audio = np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
-        return idx, audio, None
+        if _engine == ENGINE_VIENEU:
+            audio = _pipeline.infer(chunk, voice=_voice)
+            # Ensure it is a numpy array
+            if not isinstance(audio, np.ndarray):
+                audio = np.array(audio, dtype=np.float32)
+            return idx, audio, None
+        else:
+            generator = _pipeline(chunk, voice=_voice, speed=_speed)
+            parts = [audio for _, _, audio in generator]
+            audio = np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
+            return idx, audio, None
     except Exception as e:
         return idx, np.zeros(0, dtype=np.float32), str(e)
 
@@ -211,7 +232,7 @@ def create_zip_archive(part_paths: List[str], final_zip_path: str) -> Optional[s
     except Exception:
         return None
 
-def run_cpu_pipeline(segments: List[Dict[str, Any]], lang: str, voice: str, speed: float,
+def run_cpu_pipeline(segments: List[Dict[str, Any]], engine: str, lang: str, voice: str, speed: float,
                      output_prefix: str, progress_callback=None, workers: int = None):
     """
     Run TTS using multiprocessing (CPU) for text segments.
@@ -223,6 +244,8 @@ def run_cpu_pipeline(segments: List[Dict[str, Any]], lang: str, voice: str, spee
     """
     if workers is None:
         workers = max(1, mp.cpu_count() - 1)
+        
+    sample_rate = get_sample_rate(engine)
 
     # Extract only text segments for the pool
     text_segments = [(i, s) for i, s in enumerate(segments) if s['type'] == 'text']
@@ -242,7 +265,7 @@ def run_cpu_pipeline(segments: List[Dict[str, Any]], lang: str, voice: str, spee
     with mp.Pool(
         processes=workers,
         initializer=init_worker,
-        initargs=(lang, voice, speed, "cpu"),
+        initargs=(engine, lang, voice, speed, "cpu"),
     ) as pool:
         for pool_idx, (_, audio, err) in enumerate(pool.imap(process_chunk, indexed_text, chunksize=1)):
             text_audio_results[pool_idx] = (audio, err)
@@ -259,16 +282,16 @@ def run_cpu_pipeline(segments: List[Dict[str, Any]], lang: str, voice: str, spee
 
     for segment in segments:
         if segment['type'] == 'pause':
-            silence = np.zeros(int(segment['content'] * SAMPLE_RATE), dtype=np.float32)
+            silence = np.zeros(int(segment['content'] * sample_rate), dtype=np.float32)
             all_audio_parts.append(silence)
             cumulative_samples += len(silence)
         else:
             audio, err = text_audio_results[text_job_idx]
             if err:
                 errors.append((text_job_idx, err))
-            start_sec = cumulative_samples / SAMPLE_RATE
+            start_sec = cumulative_samples / sample_rate
             cumulative_samples += len(audio)
-            end_sec = cumulative_samples / SAMPLE_RATE
+            end_sec = cumulative_samples / sample_rate
             timings.append((start_sec, end_sec, segment['content']))
             if len(audio) > 0:
                 all_audio_parts.append(audio)
@@ -280,13 +303,13 @@ def run_cpu_pipeline(segments: List[Dict[str, Any]], lang: str, voice: str, spee
     # Write combined audio to a single WAV file
     part_path = f"{output_prefix}_part1.wav"
     full_audio = np.concatenate(all_audio_parts)
-    with sf.SoundFile(part_path, mode='w', samplerate=SAMPLE_RATE, channels=1, subtype='PCM_16') as f:
+    with sf.SoundFile(part_path, mode='w', samplerate=sample_rate, channels=1, subtype='PCM_16') as f:
         f.write(full_audio)
 
     return [part_path], errors, timings
 
 
-def run_gpu_pipeline(segments: List[Dict[str, Any]], lang: str, voice: str, speed: float,
+def run_gpu_pipeline(segments: List[Dict[str, Any]], engine: str, lang: str, voice: str, speed: float,
                      device: str, output_prefix: str, progress_callback=None):
     """
     Run TTS sequentially on GPU to avoid VRAM exhaustion.
@@ -296,9 +319,16 @@ def run_gpu_pipeline(segments: List[Dict[str, Any]], lang: str, voice: str, spee
         (part_paths, errors, timings)
         timings: List of (start_sec, end_sec, chunk_text) for SRT generation.
     """
-    # pyrefly: ignore [import-error, missing-import]
-    from kokoro import KPipeline
-    pipeline = KPipeline(lang_code=lang, device=device)
+    sample_rate = get_sample_rate(engine)
+    
+    if engine == ENGINE_VIENEU:
+        # pyrefly: ignore [import-error, missing-import]
+        from vieneu import Vieneu
+        pipeline = Vieneu()
+    else:
+        # pyrefly: ignore [import-error, missing-import]
+        from kokoro import KPipeline
+        pipeline = KPipeline(lang_code=lang, device=device)
 
     timings: List[Tuple[float, float, str]] = []
     errors = []
@@ -310,19 +340,24 @@ def run_gpu_pipeline(segments: List[Dict[str, Any]], lang: str, voice: str, spee
     total_text_segments = sum(1 for s in segments if s['type'] == 'text')
 
     part_path = f"{output_prefix}_part1.wav"
-    with sf.SoundFile(part_path, mode='w', samplerate=SAMPLE_RATE, channels=1, subtype='PCM_16') as writer:
+    with sf.SoundFile(part_path, mode='w', samplerate=sample_rate, channels=1, subtype='PCM_16') as writer:
         for segment in segments:
             if segment['type'] == 'pause':
-                silence = np.zeros(int(segment['content'] * SAMPLE_RATE), dtype=np.float32)
+                silence = np.zeros(int(segment['content'] * sample_rate), dtype=np.float32)
                 writer.write(silence)
                 cumulative_samples += len(silence)
             else:
                 chunk = segment['content']
-                start_sec = cumulative_samples / SAMPLE_RATE
+                start_sec = cumulative_samples / sample_rate
                 try:
-                    generator = pipeline(chunk, voice=voice, speed=speed)
-                    parts = [audio for _, _, audio in generator]
-                    audio = np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
+                    if engine == ENGINE_VIENEU:
+                        audio = pipeline.infer(chunk, voice=voice)
+                        if not isinstance(audio, np.ndarray):
+                            audio = np.array(audio, dtype=np.float32)
+                    else:
+                        generator = pipeline(chunk, voice=voice, speed=speed)
+                        parts = [audio for _, _, audio in generator]
+                        audio = np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
                     err = None
                 except Exception as e:
                     audio = np.zeros(0, dtype=np.float32)
@@ -333,7 +368,7 @@ def run_gpu_pipeline(segments: List[Dict[str, Any]], lang: str, voice: str, spee
 
                 writer.write(audio)
                 cumulative_samples += len(audio)
-                end_sec = cumulative_samples / SAMPLE_RATE
+                end_sec = cumulative_samples / sample_rate
                 timings.append((start_sec, end_sec, chunk))
 
                 processed_chars += len(chunk)

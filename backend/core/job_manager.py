@@ -10,7 +10,7 @@ def init_storage():
     """Ensure storage directory exists."""
     os.makedirs(STORAGE_DIR, exist_ok=True)
 
-def create_job(text: str, voice: str, speed: float, device_req: str, lang: str) -> str:
+def create_job(text: str, voice: str, speed: float, device_req: str, lang: str, language: str = "en") -> str:
     """Create a new job and return its ID."""
     init_storage()
     job_id = str(uuid.uuid4())
@@ -28,6 +28,7 @@ def create_job(text: str, voice: str, speed: float, device_req: str, lang: str) 
         "speed": speed,
         "device_req": device_req,
         "lang": lang,
+        "language": language,
         "created_at": time.time(),
         "updated_at": time.time(),
         "percent": 0,

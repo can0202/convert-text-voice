@@ -32,8 +32,27 @@ def get_system_info():
     return detect_device()
 
 @router.get("/voices")
-def get_voices():
-    return VOICES
+def get_voices(lang: str = "en"):
+    if lang == "en":
+        return VOICES
+    elif lang == "vi":
+        try:
+            from vieneu import Vieneu
+            tts = Vieneu()
+            v_list = tts.list_preset_voices()
+            result = []
+            for label, voice_id in v_list:
+                result.append({
+                    "id": voice_id,
+                    "name": label,
+                    "gender": "",
+                    "lang": "Vietnamese"
+                })
+            return result
+        except Exception as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=500, detail=f"Lỗi tải danh sách giọng tiếng Việt: {str(e)}")
+    return []
 
 @router.get("/voices/{voice_id}/preview")
 def get_voice_preview(voice_id: str):

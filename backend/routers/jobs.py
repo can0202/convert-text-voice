@@ -19,6 +19,7 @@ class JobRequest(BaseModel):
     text: str
     voice: str = "af_heart"
     lang: str = "a"
+    language: str = "en"
     speed: float = 1.0
     device: str = "auto"
 
@@ -64,15 +65,16 @@ def process_job_task(job_id: str):
                 last_save_time = now
 
         resolved_device = tts_engine.resolve_device(state["device_req"])
+        engine = tts_engine.ENGINE_VIENEU if state.get("language") == "vi" else tts_engine.ENGINE_KOKORO
         
         if resolved_device == "cpu":
             part_paths, errors, timings = tts_engine.run_cpu_pipeline(
-                segments, state["lang"], state["voice"], state["speed"],
+                segments, engine, state["lang"], state["voice"], state["speed"],
                 output_prefix, progress_callback
             )
         else:
             part_paths, errors, timings = tts_engine.run_gpu_pipeline(
-                segments, state["lang"], state["voice"], state["speed"],
+                segments, engine, state["lang"], state["voice"], state["speed"],
                 resolved_device, output_prefix, progress_callback
             )
             
@@ -149,7 +151,7 @@ def create_job(req: JobRequest, background_tasks: BackgroundTasks):
         if not sys_info["has_cuda"] and not sys_info["has_mps"]:
             raise HTTPException(status_code=400, detail="Không tìm thấy GPU khả dụng trên server, vui lòng chọn CPU hoặc Tự động.")
             
-    job_id = job_manager.create_job(req.text, req.voice, req.speed, req.device, req.lang)
+    job_id = job_manager.create_job(req.text, req.voice, req.speed, req.device, req.lang, req.language)
     background_tasks.add_task(process_job_task, job_id)
     
     return {"job_id": job_id}

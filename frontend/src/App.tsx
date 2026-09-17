@@ -7,6 +7,7 @@ import { useJobWebSocket } from './hooks/useJobWebSocket';
 
 function App() {
     const [text, setText] = useState('');
+    const [language, setLanguage] = useState('en');
     const [voice, setVoice] = useState('am_echo');
     const [speed, setSpeed] = useState(1.0);
     const [device, setDevice] = useState('auto');
@@ -24,11 +25,17 @@ function App() {
             .then(data => setSysInfo(data))
             .catch(err => console.error('Failed to fetch sys info', err));
 
-        fetch('http://127.0.0.1:8000/api/voices')
+        fetch(`http://127.0.0.1:8000/api/voices?lang=${language}`)
             .then(res => res.json())
-            .then(data => setVoices(data))
+            .then(data => {
+                setVoices(data);
+                // reset voice if not found in new list
+                if (data.length > 0 && !data.find((v: any) => v.id === voice)) {
+                    setVoice(data[0].id);
+                }
+            })
             .catch(err => console.error('Failed to fetch voices', err));
-    }, []);
+    }, [language]); // <-- re-fetch when language changes
 
     const handleSubmit = async () => {
         if (!text.trim()) {
@@ -43,7 +50,7 @@ function App() {
             const res = await fetch('http://127.0.0.1:8000/api/jobs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice, speed, device })
+                body: JSON.stringify({ text, voice, speed, device, language })
             });
 
             if (!res.ok) {
@@ -120,6 +127,8 @@ function App() {
                             <h2 className="font-semibold text-white text-sm">Cấu hình giọng đọc</h2>
                         </div>
                         <VoiceSelector
+                            language={language}
+                            onLanguageChange={setLanguage}
                             voices={voices}
                             selectedVoice={voice}
                             onVoiceChange={setVoice}
