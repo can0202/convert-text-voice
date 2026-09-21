@@ -3,6 +3,11 @@ import sys
 import numpy as np
 
 def main():
+    if sys.stdout.encoding.lower() != 'utf-8':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except AttributeError:
+            pass
     sys.path.append(os.path.abspath('backend'))
     # pyrefly: ignore [missing-import]
     from shutil import which
@@ -102,6 +107,57 @@ def main():
         else:
             os.rename(temp_wav, final_wav)
             print(f"  Saved: {voice_id}.wav")
+
+    # --- Generate Vietnamese Previews ---
+    print("\n--- Generating Vietnamese Previews ---")
+    try:
+        from vieneu import Vieneu
+        vi_tts = Vieneu()
+        vi_voices = vi_tts.list_preset_voices()
+        for label, voice_id in vi_voices:
+            final_mp3 = os.path.join(preview_dir, f'{voice_id}.mp3')
+            final_wav = os.path.join(preview_dir, f'{voice_id}.wav')
+
+            if os.path.exists(final_mp3) or os.path.exists(final_wav):
+                print(f"Skipping {voice_id} (already exists)...")
+                continue
+
+            text = f"Xin chào, tôi là giọng {label}."
+            print(f"Generating {voice_id} — \"{text}\"")
+            try:
+                audio = vi_tts.infer(text, voice=voice_id)
+                if not isinstance(audio, np.ndarray):
+                    audio = np.array(audio, dtype=np.float32)
+            except Exception as e:
+                print(f"  ERROR generating {voice_id}: {e}")
+                continue
+
+            temp_wav = os.path.join(preview_dir, f'{voice_id}_temp.wav')
+            with sf.SoundFile(temp_wav, mode='w', samplerate=48000, channels=1, subtype='PCM_16') as f:
+                f.write(audio)
+
+            if has_ffmpeg:
+                import subprocess
+                result = subprocess.run(
+                    ['ffmpeg', '-y', '-i', temp_wav, '-q:a', '2', final_mp3],
+                    capture_output=True
+                )
+                try:
+                    os.remove(temp_wav)
+                except Exception:
+                    pass
+                if result.returncode == 0:
+                    print(f"  Saved: {voice_id}.mp3")
+                else:
+                    os.rename(temp_wav, final_wav)
+                    print(f"  WARNING: ffmpeg failed, saved as {voice_id}.wav")
+            else:
+                os.rename(temp_wav, final_wav)
+                print(f"  Saved: {voice_id}.wav")
+    except ImportError:
+        print("Vieneu not installed, skipping Vietnamese voices.")
+    except Exception as e:
+        print(f"Error generating Vietnamese voices: {e}")
 
     print("\nDone! Preview files:")
     for f in sorted(os.listdir(preview_dir)):

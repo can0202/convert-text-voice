@@ -66,6 +66,10 @@ export function VoiceSelector({
     ];
 
     const renderVoices = () => {
+        if (!Array.isArray(voices)) {
+            return <option disabled>Lỗi tải danh sách giọng</option>;
+        }
+
         if (language === 'en') {
             return voices.map(v => (
                 <option key={v.id} value={v.id} style={{ background: '#1e2130' }}>
