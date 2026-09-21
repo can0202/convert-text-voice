@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TextInput } from './components/TextInput';
 import { VoiceSelector } from './components/VoiceSelector';
 import { ProgressBar } from './components/ProgressBar';
 import { AudioResult } from './components/AudioResult';
 import { useJobWebSocket } from './hooks/useJobWebSocket';
+import { API_BASE } from './config/api';
 
 function App() {
     const [text, setText] = useState('');
@@ -13,6 +14,9 @@ function App() {
     const [device, setDevice] = useState('auto');
     const [sysInfo, setSysInfo] = useState<any>(null);
     const [voices, setVoices] = useState<any[]>([]);
+    const [voicesLoading, setVoicesLoading] = useState(false);
+    // Cache: { en: [...], vi: [...] }
+    const voicesCache = useRef<Record<string, any[]>>({});
 
     const [currentJobId, setCurrentJobId] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -20,22 +24,38 @@ function App() {
     const jobState = useJobWebSocket(currentJobId);
 
     useEffect(() => {
-        fetch('http://127.0.0.1:8000/api/system-info')
+        fetch(`${API_BASE}/system-info`)
             .then(res => res.json())
             .then(data => setSysInfo(data))
             .catch(err => console.error('Failed to fetch sys info', err));
+    }, []);
 
-        fetch(`http://127.0.0.1:8000/api/voices?lang=${language}`)
+    useEffect(() => {
+        // Serve from cache instantly if available
+        if (voicesCache.current[language]) {
+            const cached = voicesCache.current[language];
+            setVoices(cached);
+            if (cached.length > 0 && !cached.find((v: any) => v.id === voice)) {
+                setVoice(cached[0].id);
+            }
+            return;
+        }
+
+        // Fetch from server
+        setVoicesLoading(true);
+        fetch(`${API_BASE}/voices?lang=${language}`)
             .then(res => res.json())
             .then(data => {
-                setVoices(data);
-                // reset voice if not found in new list
-                if (data.length > 0 && !data.find((v: any) => v.id === voice)) {
-                    setVoice(data[0].id);
+                const list = Array.isArray(data) ? data : [];
+                voicesCache.current[language] = list;
+                setVoices(list);
+                if (list.length > 0 && !list.find((v: any) => v.id === voice)) {
+                    setVoice(list[0].id);
                 }
             })
-            .catch(err => console.error('Failed to fetch voices', err));
-    }, [language]); // <-- re-fetch when language changes
+            .catch(err => console.error('Failed to fetch voices', err))
+            .finally(() => setVoicesLoading(false));
+    }, [language]);
 
     const handleSubmit = async () => {
         if (!text.trim()) {
@@ -47,7 +67,7 @@ function App() {
         setCurrentJobId(null);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/jobs', {
+            const res = await fetch(`${API_BASE}/jobs`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text, voice, speed, device, language })
@@ -108,74 +128,80 @@ function App() {
             {/* ── Main 2-column layout ── */}
             <main className="flex-1 flex overflow-hidden">
 
-                {/* ── LEFT: Input panel (wider) ── */}
-                <div className={`flex flex-col gap-5 p-6 overflow-y-auto scrollbar-thin transition-all duration-300 ${showRightPanel ? 'w-[62%]' : 'w-full  mx-auto'}`}>
+                {/* ── LEFT: Input panel ── */}
+                <div className={`flex flex-col gap-5 p-6 overflow-y-auto scrollbar-thin transition-all duration-300 ${showRightPanel ? 'w-[62%]' : 'w-full mx-auto'}`}>
 
-                    {/* Text input */}
-                    <section className="glass-card rounded-2xl p-5 flex flex-col gap-3">
-                        <div className="flex items-center gap-2 mb-1">
+                    {/* Combined text + controls card */}
+                    <section className="glass-card rounded-2xl flex flex-col overflow-hidden">
+
+                        {/* Card header */}
+                        <div className="flex items-center gap-2 px-5 pt-5 pb-3">
                             <span className="text-violet-400 text-lg">✦</span>
                             <h2 className="font-semibold text-white text-sm">Nội dung văn bản</h2>
                         </div>
-                        <TextInput value={text} onChange={setText} disabled={!!isProcessing} />
-                    </section>
 
-                    {/* Voice & Settings */}
-                    <section className="glass-card rounded-2xl p-5">
-                        <div className="flex items-center gap-2 mb-4">
-                            <span className="text-violet-400 text-lg">⚙</span>
-                            <h2 className="font-semibold text-white text-sm">Cấu hình giọng đọc</h2>
+                        {/* Textarea */}
+                        <div className="px-5">
+                            <TextInput value={text} onChange={setText} disabled={!!isProcessing} />
                         </div>
-                        <VoiceSelector
-                            language={language}
-                            onLanguageChange={setLanguage}
-                            voices={voices}
-                            selectedVoice={voice}
-                            onVoiceChange={setVoice}
-                            speed={speed}
-                            onSpeedChange={setSpeed}
-                            device={device}
-                            onDeviceChange={setDevice}
-                            sysInfo={sysInfo}
-                            disabled={!!isProcessing}
-                        />
+
+                        {/* Bottom toolbar: Voice bar | char count | Generate */}
+                        <div className="flex items-center gap-3 px-5 py-3 mt-2 border-t border-white/[0.06]">
+                            {/* Voice selector compact bar */}
+                            <VoiceSelector
+                                language={language}
+                                onLanguageChange={setLanguage}
+                                voices={voices}
+                                selectedVoice={voice}
+                                onVoiceChange={setVoice}
+                                speed={speed}
+                                onSpeedChange={setSpeed}
+                                device={device}
+                                onDeviceChange={setDevice}
+                                sysInfo={sysInfo}
+                                disabled={!!isProcessing}
+                                voicesLoading={voicesLoading}
+                            />
+
+                            {/* Spacer */}
+                            <div className="flex-1" />
+
+                            {/* Generate button */}
+                            <button
+                                id="btn-generate"
+                                onClick={handleSubmit}
+                                disabled={!!isProcessing || isSubmitting || text.trim().length === 0}
+                                className="
+                                    relative group flex items-center gap-2
+                                    px-5 py-2 rounded-xl font-semibold text-sm
+                                    bg-gradient-to-r from-violet-600 to-indigo-600
+                                    hover:from-violet-500 hover:to-indigo-500
+                                    disabled:from-slate-700 disabled:to-slate-700
+                                    disabled:text-slate-500 disabled:cursor-not-allowed
+                                    text-white shadow-lg shadow-violet-500/25
+                                    transition-all duration-200 active:scale-95
+                                    hover:shadow-violet-500/40 hover:shadow-xl
+                                "
+                            >
+                                {(isSubmitting || isProcessing) ? (
+                                    <>
+                                        <svg className="w-4 h-4 animate-spin-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 12a8 8 0 018-8" />
+                                        </svg>
+                                        {isSubmitting ? 'Đang gửi...' : 'Đang xử lý...'}
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
+                                        </svg>
+                                        Tạo giọng nói →
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </section>
 
-                    {/* Submit button */}
-                    <div className="flex justify-start">
-                        <button
-                            id="btn-generate"
-                            onClick={handleSubmit}
-                            disabled={!!isProcessing || isSubmitting || text.trim().length === 0}
-                            className="
-                                relative group flex items-center gap-3
-                                px-8 py-3.5 rounded-xl font-semibold text-sm
-                                bg-gradient-to-r from-violet-600 to-indigo-600
-                                hover:from-violet-500 hover:to-indigo-500
-                                disabled:from-slate-700 disabled:to-slate-700
-                                disabled:text-slate-500 disabled:cursor-not-allowed
-                                text-white shadow-lg shadow-violet-500/25
-                                transition-all duration-200 active:scale-95
-                                hover:shadow-violet-500/40 hover:shadow-xl
-                            "
-                        >
-                            {(isSubmitting || isProcessing) ? (
-                                <>
-                                    <svg className="w-4 h-4 animate-spin-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 12a8 8 0 018-8" />
-                                    </svg>
-                                    {isSubmitting ? 'Đang gửi...' : 'Đang xử lý...'}
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
-                                    </svg>
-                                    Tạo giọng nói
-                                </>
-                            )}
-                        </button>
-                    </div>
                 </div>
 
                 {/* ── RIGHT: Result panel (narrower, slides in) ── */}

@@ -41,7 +41,7 @@ export function TextInput({ value, onChange, disabled }: TextInputProps) {
             <textarea
                 id="text-input"
                 className="
-                    w-full h-60 p-4 rounded-xl
+                    w-full h-80 p-4 rounded-xl
                     input-dark scrollbar-thin
                     font-mono text-sm leading-relaxed resize-none
                 "

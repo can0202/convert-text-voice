@@ -42,10 +42,23 @@ def get_voices(lang: str = "en"):
             v_list = tts.list_preset_voices()
             result = []
             for label, voice_id in v_list:
+                # Parse gender from label: "⭐ Adam bựa — Nam · Bắc · Phong cách tự nhiên"
+                # The part after " — " contains "Nam" or "Nữ" as the first token
+                gender = ""
+                if " — " in label:
+                    after_dash = label.split(" — ", 1)[1]
+                    first_token = after_dash.split("·")[0].strip()
+                    if "Nữ" in first_token:
+                        gender = "Female"
+                    elif "Nam" in first_token:
+                        gender = "Male"
+                # Clean display name: remove leading emoji/star chars and trailing details
+                # Keep everything before " — " and strip leading ⭐/emoji
+                display_name = label.split(" — ")[0].strip().lstrip("⭐ ").strip()
                 result.append({
                     "id": voice_id,
-                    "name": label,
-                    "gender": "",
+                    "name": display_name,
+                    "gender": gender,
                     "lang": "Vietnamese"
                 })
             return result
